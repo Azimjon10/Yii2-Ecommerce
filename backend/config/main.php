@@ -37,6 +37,7 @@ return [
         'errorHandler' => [
             'errorAction' => 'site/error',
         ],
+
 //        'assetManager' =>[
 //            'appendTimestamp' => true,
 //            'bundle' =>[
