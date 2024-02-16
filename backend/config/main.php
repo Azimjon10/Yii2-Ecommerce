@@ -38,12 +38,13 @@ return [
             'errorAction' => 'site/error',
         ],
 
-//        'assetManager' =>[
-//            'appendTimestamp' => true,
-//            'bundle' =>[
-//                \yii\bootstrap4\BootstrapAsset::class => false
-//            ]
-//        ]
+        'assetManager' => [
+            'appendTimestamp' => true,
+            'bundles' => [
+                'yii\bootstrap4\BootstrapAsset' => false, // Disable loading Bootstrap 4 assets
+            ],
+        ],
+
 //        'assetManager' => [
 //            'bundles' => [
 //                'app\assets\Bootstrap5Asset' => ['css' => [], 'js' => [],],
