@@ -27,8 +27,18 @@ $this->params['breadcrumbs'][] = $this->title;
         'dataProvider' => $dataProvider,
         'filterModel' => $searchModel,
         'columns' => [
-            'id',
-            'name',
+            [
+                'attribute' => 'id',
+                'contentOptions' => [
+                    'style' => 'width: 60px'
+                ]
+            ],
+            [
+                'attribute' => 'name',
+                'content' => function ($model) {
+                    return \yii\helpers\StringHelper::truncateWords($model->name, 7);
+                }
+            ],
             [
                 'label' => 'Image',
                 'attribute' => 'image',
@@ -37,17 +47,33 @@ $this->params['breadcrumbs'][] = $this->title;
                     return Html::img($model->getImageUrl(), ['style' => 'width: 50px']);
                 }
             ],
-            'price',
-            'status',
-            'created_at',
-            'updated_at',
-            //'created_by',
-            //'updated_by',
+            'price:currency',
             [
-                'class' => ActionColumn::className(),
-                'urlCreator' => function ($action, Product $model, $key, $index, $column) {
-                    return Url::toRoute([$action, 'id' => $model->id]);
-                 }
+                'attribute' => 'status',
+                'content' => function ($model) {
+                    /** @var \common\models\Product $model */
+                    return Html::tag('span', $model->status ? 'Active' : 'Draft', [
+                        'class' => $model->status ? 'badge badge-success' : 'badge badge-danger'
+                    ]);
+                }
+            ],
+            'status',
+            [
+                'attribute' => 'created_at',
+                'format' => ['datetime'],
+                'contentOptions' => ['style' => 'white-space: nowrap']
+            ],
+            [
+                'attribute' => 'updated_at',
+                'format' => ['datetime'],
+                'contentOptions' => ['style' => 'white-space: nowrap']
+            ],
+
+            [
+                'class' => 'common\grid\ActionColumn',
+                'contentOptions' => [
+                    'class' => 'td-actions'
+                ]
             ],
         ],
     ]); ?>
