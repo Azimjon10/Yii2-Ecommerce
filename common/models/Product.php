@@ -3,34 +3,52 @@
 namespace common\models;
 
 use Yii;
+use yii\base\ErrorException;
+use yii\base\Exception;
+use yii\behaviors\BlameableBehavior;
+use yii\behaviors\TimestampBehavior;
+use yii\helpers\FileHelper;
 
 /**
  * This is the model class for table "{{%products}}".
  *
- * @property int $id
- * @property string $name
+ * @property int         $id
+ * @property string      $name
  * @property string|null $description
  * @property string|null $image
- * @property float $price
- * @property int $status
- * @property int|null $created_at
- * @property int|null $updated_at
- * @property int|null $created_by
- * @property int|null $updated_by
+ * @property float       $price
+ * @property int         $status
+ * @property int|null    $created_at
+ * @property int|null    $updated_at
+ * @property int|null    $created_by
+ * @property int|null    $updated_by
  *
- * @property CartItems[] $cartItems
- * @property User $createdBy
- * @property OrderItems[] $orderItems
- * @property User $updatedBy
+ * @property CartItem[]  $cartItems
+ * @property OrderItem[] $orderItems
+ * @property User        $createdBy
+ * @property User        $updatedBy
  */
 class Product extends \yii\db\ActiveRecord
 {
+    /**
+     * @var \yii\web\UploadedFile
+     */
+    public $imageFile;
+
     /**
      * {@inheritdoc}
      */
     public static function tableName()
     {
         return '{{%products}}';
+    }
+
+    public function behaviors()
+    {
+        return [
+            TimestampBehavior::class,
+            BlameableBehavior::class
+        ];
     }
 
     /**
@@ -42,11 +60,12 @@ class Product extends \yii\db\ActiveRecord
             [['name', 'price', 'status'], 'required'],
             [['description'], 'string'],
             [['price'], 'number'],
+            [['imageFile'], 'image', 'extensions' => 'png, jpg, jpeg, webp', 'maxSize' => 10 * 1024 * 1024],
             [['status', 'created_at', 'updated_at', 'created_by', 'updated_by'], 'integer'],
             [['name'], 'string', 'max' => 255],
             [['image'], 'string', 'max' => 2000],
-            [['created_by'], 'exist', 'skipOnError' => true, 'targetClass' => User::class, 'targetAttribute' => ['created_by' => 'id']],
-            [['updated_by'], 'exist', 'skipOnError' => true, 'targetClass' => User::class, 'targetAttribute' => ['updated_by' => 'id']],
+            [['created_by'], 'exist', 'skipOnError' => true, 'targetClass' => User::className(), 'targetAttribute' => ['created_by' => 'id']],
+            [['updated_by'], 'exist', 'skipOnError' => true, 'targetClass' => User::className(), 'targetAttribute' => ['updated_by' => 'id']],
         ];
     }
 
@@ -59,9 +78,10 @@ class Product extends \yii\db\ActiveRecord
             'id' => 'ID',
             'name' => 'Name',
             'description' => 'Description',
-            'image' => 'Image',
+            'image' => 'Product Image',
+            'imageFile' => 'Product Image',
             'price' => 'Price',
-            'status' => 'Status',
+            'status' => 'Published',
             'created_at' => 'Created At',
             'updated_at' => 'Updated At',
             'created_by' => 'Created By',
@@ -70,13 +90,23 @@ class Product extends \yii\db\ActiveRecord
     }
 
     /**
-     * Gets query for [[CartItems]].
+     * Gets query for [[CartItem]].
      *
-     * @return \yii\db\ActiveQuery|\common\models\query\CartItemsQuery
+     * @return \yii\db\ActiveQuery|\common\models\query\CartItemQuery
      */
     public function getCartItems()
     {
-        return $this->hasMany(CartItems::class, ['product_id' => 'id']);
+        return $this->hasMany(CartItem::className(), ['product_id' => 'id']);
+    }
+
+    /**
+     * Gets query for [[OrderItem]].
+     *
+     * @return \yii\db\ActiveQuery|\common\models\query\OrderItemQuery
+     */
+    public function getOrderItems()
+    {
+        return $this->hasMany(OrderItem::className(), ['product_id' => 'id']);
     }
 
     /**
@@ -86,17 +116,7 @@ class Product extends \yii\db\ActiveRecord
      */
     public function getCreatedBy()
     {
-        return $this->hasOne(User::class, ['id' => 'created_by']);
-    }
-
-    /**
-     * Gets query for [[OrderItems]].
-     *
-     * @return \yii\db\ActiveQuery|\common\models\query\OrderItemsQuery
-     */
-    public function getOrderItems()
-    {
-        return $this->hasMany(OrderItems::class, ['product_id' => 'id']);
+        return $this->hasOne(User::className(), ['id' => 'created_by']);
     }
 
     /**
@@ -106,7 +126,7 @@ class Product extends \yii\db\ActiveRecord
      */
     public function getUpdatedBy()
     {
-        return $this->hasOne(User::class, ['id' => 'updated_by']);
+        return $this->hasOne(User::className(), ['id' => 'updated_by']);
     }
 
     /**
@@ -116,5 +136,70 @@ class Product extends \yii\db\ActiveRecord
     public static function find()
     {
         return new \common\models\query\ProductQuery(get_called_class());
+    }
+
+    /**
+     * @throws Exception
+     * @throws \yii\db\Exception
+     */
+    public function save($runValidation = true, $attributeNames = null): bool
+    {
+        if ($this->imageFile) {
+            $this->image = '/products/' . Yii::$app->security->generateRandomString() . '/' . $this->imageFile->name;
+        }
+
+        $transaction = Yii::$app->db->beginTransaction();
+        $ok = parent::save($runValidation, $attributeNames);
+
+        if ($ok && $this->imageFile) {
+            $fullPath = Yii::getAlias('@frontend/web/storage' . $this->image);
+            $dir = dirname($fullPath);
+            if (!FileHelper::createDirectory($dir) | !$this->imageFile->saveAs($fullPath)) {
+                $transaction->rollBack();
+
+                return false;
+            }
+        }
+
+        $transaction->commit();
+
+        return $ok;
+    }
+
+    public function getImageUrl(): string
+    {
+        return self::formatImageUrl($this->image);
+    }
+
+    public static function formatImageUrl($imagePath): string
+    {
+        if ($imagePath) {
+            return Yii::$app->params['frontendUrl'] . '/storage' . $imagePath;
+        }
+
+        return Yii::$app->params['frontendUrl'] . '/img/no_image_available.png';
+    }
+
+    /**
+     * Get short version of the description
+     *
+     * @return string
+     * @author Zura Sekhniashvili <zurasekhniashvili@gmail.com>
+     */
+    public function getShortDescription()
+    {
+        return \yii\helpers\StringHelper::truncateWords(strip_tags($this->description), 30);
+    }
+
+    /**
+     * @throws ErrorException
+     */
+    public function afterDelete()
+    {
+        parent::afterDelete();
+        if ($this->image) {
+            $dir = Yii::getAlias('@frontend/web/storage'). dirname($this->image);
+            FileHelper::removeDirectory($dir);
+        }
     }
 }
