@@ -2,6 +2,8 @@
 
 namespace common\models\query;
 
+use common\models\Product;
+
 /**
  * This is the ActiveQuery class for [[\common\models\Product]].
  *
@@ -30,5 +32,13 @@ class ProductQuery extends \yii\db\ActiveQuery
     public function one($db = null)
     {
         return parent::one($db);
+    }
+
+    /**
+     * @return \common\models\query\ProductQuery
+     */
+    public function published()
+    {
+        return $this->andWhere(['status' => 1]);
     }
 }
