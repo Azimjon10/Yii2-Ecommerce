@@ -24,6 +24,8 @@ use yii\web\IdentityInterface;
  * @property integer $created_at
  * @property integer $updated_at
  * @property string $password write-only password
+ * @property \common\models\UserAddress[] $addresses
+ * /
  */
 class User extends ActiveRecord implements IdentityInterface
 {
@@ -39,7 +41,8 @@ class User extends ActiveRecord implements IdentityInterface
      */
     public $lastname;
 
-
+    public $password;
+    public $password_repeat;
     /**
      * {@inheritdoc}
      */
@@ -58,14 +61,23 @@ class User extends ActiveRecord implements IdentityInterface
         ];
     }
 
+
+
     /**
      * {@inheritdoc}
      */
     public function rules(): array
     {
         return [
+            [['firstname', 'lastname', 'username', 'email'], 'required'],
+            [['firstname', 'lastname', 'username', 'email'], 'string', 'max' => 255],
             ['status', 'default', 'value' => self::STATUS_INACTIVE],
             ['status', 'in', 'range' => [self::STATUS_ACTIVE, self::STATUS_INACTIVE, self::STATUS_DELETED]],
+            ['password', 'string', 'min' => 8],
+            ['admin', 'default', 'value' => 0],
+            ['password_repeat', 'compare', 'compareAttribute' => 'password'],
+            ['username', 'unique', 'targetClass' => self::class, 'message' => 'This username has already been taken.'],
+            ['email', 'unique', 'targetClass' => self::class, 'message' => 'This email address has already been taken.'],
         ];
     }
 
@@ -225,5 +237,17 @@ class User extends ActiveRecord implements IdentityInterface
     {
         $fullName = trim($this->firstname.' '.$this->lastname);
         return $fullName ?: $this->email;
+    }
+
+
+    public function getAddresses()
+    {
+        return $this->hasMany(UserAddress::class, ['user_id' => 'id']);
+    }
+    public function getAddress(): ?UserAddress
+    {
+        $address = $this->addresses[0] ?? new UserAddress();
+        $address->user_id = $this->id;
+        return $address;
     }
 }
